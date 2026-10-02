@@ -1,48 +1,37 @@
-import { ScrollView, Text, View, TouchableOpacity } from "react-native";
-
+import { router } from "expo-router";
+import { ScrollView, Text, View, Pressable, StyleSheet } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
+import { BrandMark, EntryRow, Icon, Pill, ProgressBar, SectionTitle, Surface, palette } from "@/components/finance-ui";
+import { formatBRL, formatCompactBRL, isCurrentMonth, useFinance } from "@/lib/finance-store";
 
-/**
- * Home Screen - NativeWind Example
- *
- * This template uses NativeWind (Tailwind CSS for React Native).
- * You can use familiar Tailwind classes directly in className props.
- *
- * Key patterns:
- * - Use `className` instead of `style` for most styling
- * - Theme colors: use tokens directly (bg-background, text-foreground, bg-primary, etc.); no dark: prefix needed
- * - Responsive: standard Tailwind breakpoints work on web
- * - Custom colors defined in tailwind.config.js
- */
 export default function HomeScreen() {
-  return (
-    <ScreenContainer className="p-6">
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-        <View className="flex-1 gap-8">
-          {/* Hero Section */}
-          <View className="items-center gap-2">
-            <Text className="text-4xl font-bold text-foreground">Welcome</Text>
-            <Text className="text-base text-muted text-center">
-              Edit app/(tabs)/index.tsx to get started
-            </Text>
-          </View>
+  const { entries, plan, connection, lastSyncAt } = useFinance();
+  const monthEntries = entries.filter((entry) => isCurrentMonth(entry.date));
+  const income = monthEntries.filter((entry) => entry.type === "income").reduce((sum, entry) => sum + entry.amount, 0);
+  const expenses = monthEntries.filter((entry) => entry.type === "expense").reduce((sum, entry) => sum + entry.amount, 0);
+  const balance = income - expenses;
+  const cardBill = monthEntries.filter((entry) => entry.type === "expense" && entry.paymentMethod === "credit").reduce((sum, entry) => sum + entry.amount, 0);
+  const categoryTotals = monthEntries.filter((entry) => entry.type === "expense").reduce<Record<string, number>>((map, entry) => ({ ...map, [entry.category]: (map[entry.category] || 0) + entry.amount }), {});
+  const topCategories = Object.entries(categoryTotals).sort(([, a], [, b]) => b - a);
+  const spendRate = plan.income ? Math.round((expenses / plan.income) * 100) : 0;
+  const syncLabel = connection === "connected" ? "C6 conectado" : connection === "pending" ? "Sync pendente" : "Modo demonstração";
+  const dateLabel = lastSyncAt ? `Atualizado às ${new Date(lastSyncAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : "Dados de exemplo prontos";
 
-          {/* Example Card */}
-          <View className="w-full max-w-sm self-center bg-surface rounded-2xl p-6 shadow-sm border border-border">
-            <Text className="text-lg font-semibold text-foreground mb-2">NativeWind Ready</Text>
-            <Text className="text-sm text-muted leading-relaxed">
-              Use Tailwind CSS classes directly in your React Native components.
-            </Text>
-          </View>
-
-          {/* Example Button */}
-          <View className="items-center">
-            <TouchableOpacity className="bg-primary px-6 py-3 rounded-full active:opacity-80">
-              <Text className="text-background font-semibold">Get Started</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
-    </ScreenContainer>
-  );
+  return <ScreenContainer edges={["top", "left", "right"]} containerClassName="bg-[#0D1112]" safeAreaClassName="bg-[#0D1112]"><ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <View style={styles.header}><BrandMark /><View style={styles.headerRight}><Pill tone={connection === "connected" ? "lime" : "muted"}>{syncLabel}</Pill><Pressable onPress={() => router.push("/connect")} style={styles.avatar}><Text style={styles.avatarText}>LC</Text></Pressable></View></View>
+    <View style={styles.greeting}><View><Text style={styles.kicker}>SEXTA, 02 DE OUTUBRO</Text><Text style={styles.title}>Você está no controle.</Text></View><Icon name="sunny-outline" size={24} color={palette.amber} /></View>
+    <Surface style={styles.balanceCard}><View style={styles.balanceTop}><View><Text style={styles.cardEyebrow}>SALDO DO MÊS</Text><Text style={styles.balance}>{formatBRL(balance)}</Text></View><View style={styles.balanceIcon}><Icon name={balance >= 0 ? "trending-up-outline" : "trending-down-outline"} size={22} color={palette.bg} /></View></View><Text style={styles.balanceHint}>{balance >= 0 ? "Isso é o que sobra depois dos seus gastos." : "Você já passou da sua renda planejada."}</Text><View style={styles.balanceBar}><View style={[styles.balanceBarFill, { width: `${Math.min(Math.max(spendRate, 5), 100)}%` }]} /></View><View style={styles.balanceBarLabels}><Text style={styles.balanceHint}>{spendRate}% da renda comprometida</Text><Text style={styles.balanceHint}>{formatCompactBRL(plan.income)} planejados</Text></View></Surface>
+    <View style={styles.statsRow}><Stat label="Entradas" value={formatCompactBRL(income)} color={palette.lime} icon="arrow-down-outline" /><Stat label="Gastos" value={formatCompactBRL(expenses)} color={palette.coral} icon="arrow-up-outline" /><Stat label="Fatura aberta" value={formatCompactBRL(cardBill)} color={palette.amber} icon="card-outline" /></View>
+    <View style={styles.actionRow}><Pressable onPress={() => router.push("/entries")} style={styles.quickAction}><Icon name="add-circle-outline" size={19} color={palette.bg} /><Text style={styles.quickActionText}>Adicionar gasto</Text></Pressable><Pressable onPress={() => router.push("/connect")} style={styles.secondaryAction}><Icon name="sync-outline" size={18} color={palette.lime} /><Text style={styles.secondaryActionText}>Sincronizar</Text></Pressable></View>
+    <SectionTitle eyebrow="leitura rápida" title="Onde está indo seu dinheiro?" action="Ver tudo" onAction={() => router.push("/entries")} />
+    <Surface><View style={styles.categoryHeader}><Text style={styles.muted}>CATEGORIA</Text><Text style={styles.muted}>GASTO / LIMITE</Text></View>{(topCategories.length ? topCategories : [["Alimentação", 0] as [string, number]]).slice(0, 4).map(([category, total]) => { const budget = plan.budgets[category] || 1; const percent = Math.round((total / budget) * 100); const over = percent > 100; return <View key={category} style={styles.categoryRow}><View style={styles.categoryLine}><View style={styles.categoryName}><View style={[styles.dot, { backgroundColor: over ? palette.coral : palette.lime }]} /><Text style={styles.categoryText}>{category}</Text></View><Text style={[styles.categoryAmount, over && { color: palette.coral }]}>{formatBRL(total)} <Text style={styles.categoryBudget}>/ {formatCompactBRL(budget)}</Text></Text></View><ProgressBar value={percent} color={over ? palette.coral : palette.lime} /></View>; })}</Surface>
+    <Surface style={styles.diagnosis}><View style={styles.diagnosisIcon}><Icon name="bulb-outline" size={21} color={palette.amber} /></View><View style={{ flex: 1 }}><Text style={styles.diagnosisLabel}>DIAGNÓSTICO DO MÊS</Text><Text style={styles.diagnosisText}>{topCategories[0] ? `Alimentação já consumiu ${Math.round(((categoryTotals.Alimentação || 0) / (plan.budgets.Alimentação || 1)) * 100)}% do limite. Ainda dá para ajustar sem cortar tudo.` : "Adicione um lançamento para receber um diagnóstico."}</Text></View></Surface>
+    <SectionTitle eyebrow="seus últimos movimentos" title="Atividade recente" action="Lançamentos" onAction={() => router.push("/entries")} />
+    <Surface style={{ paddingHorizontal: 15 }}>{entries.slice(0, 4).map((entry) => <EntryRow key={entry.id} entry={entry} />)}<Text style={styles.syncNote}>{dateLabel}</Text></Surface>
+    <View style={{ height: 20 }} />
+  </ScrollView></ScreenContainer>;
 }
+
+function Stat({ label, value, color, icon }: { label: string; value: string; color: string; icon: string }) { return <View style={styles.stat}><Icon name={icon} size={16} color={color} /><Text style={styles.statLabel}>{label}</Text><Text style={styles.statValue}>{value}</Text></View>; }
+
+const styles = StyleSheet.create({ content: { width: "100%", maxWidth: 780, alignSelf: "center", paddingHorizontal: 18, paddingBottom: 28, gap: 16 }, header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 8 }, headerRight: { flexDirection: "row", alignItems: "center", gap: 10 }, avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: palette.surfaceAlt, borderWidth: 1, borderColor: palette.border, alignItems: "center", justifyContent: "center" }, avatarText: { color: palette.text, fontSize: 11, fontWeight: "800" }, greeting: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 10 }, kicker: { color: palette.muted, fontSize: 11, fontWeight: "800", letterSpacing: 1.2, marginBottom: 6 }, title: { color: palette.text, fontSize: 26, fontWeight: "900", letterSpacing: -0.8 }, balanceCard: { backgroundColor: palette.lime, borderColor: palette.lime, padding: 18 }, balanceTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }, cardEyebrow: { color: "#34421B", fontWeight: "800", fontSize: 11, letterSpacing: 1.1 }, balance: { color: palette.bg, fontSize: 34, fontWeight: "900", letterSpacing: -1.4, marginTop: 6 }, balanceIcon: { width: 40, height: 40, borderRadius: 14, backgroundColor: "rgba(13,17,18,0.12)", alignItems: "center", justifyContent: "center" }, balanceHint: { color: "#50612A", fontSize: 12, fontWeight: "600" }, balanceBar: { height: 7, borderRadius: 7, backgroundColor: "rgba(13,17,18,0.13)", overflow: "hidden", marginTop: 16 }, balanceBarFill: { height: 7, borderRadius: 7, backgroundColor: palette.bg }, balanceBarLabels: { flexDirection: "row", justifyContent: "space-between", marginTop: 7 }, statsRow: { flexDirection: "row", gap: 9 }, stat: { flex: 1, backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.border, borderRadius: 16, padding: 12, minHeight: 88 }, statLabel: { color: palette.muted, fontSize: 11, marginTop: 9 }, statValue: { color: palette.text, fontSize: 15, fontWeight: "800", marginTop: 4 }, actionRow: { flexDirection: "row", gap: 10 }, quickAction: { flex: 1, backgroundColor: palette.lime, minHeight: 48, borderRadius: 15, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }, quickActionText: { color: palette.bg, fontWeight: "800", fontSize: 13 }, secondaryAction: { flex: 1, backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.border, minHeight: 48, borderRadius: 15, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }, secondaryActionText: { color: palette.text, fontWeight: "800", fontSize: 13 }, muted: { color: palette.muted, fontSize: 10, letterSpacing: 1, fontWeight: "800" }, categoryHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 }, categoryRow: { paddingVertical: 10 }, categoryLine: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }, categoryName: { flexDirection: "row", alignItems: "center", gap: 8 }, dot: { width: 8, height: 8, borderRadius: 4 }, categoryText: { color: palette.text, fontWeight: "700", fontSize: 14 }, categoryAmount: { color: palette.text, fontSize: 12, fontWeight: "800" }, categoryBudget: { color: palette.muted, fontWeight: "600" }, diagnosis: { flexDirection: "row", gap: 12, backgroundColor: palette.amberSoft, borderColor: "#5A4723" }, diagnosisIcon: { width: 38, height: 38, borderRadius: 13, backgroundColor: "#473A1E", alignItems: "center", justifyContent: "center" }, diagnosisLabel: { color: palette.amber, fontSize: 10, letterSpacing: 1.1, fontWeight: "800", marginBottom: 5 }, diagnosisText: { color: "#F1D99E", fontSize: 13, lineHeight: 19 }, syncNote: { color: palette.muted, fontSize: 11, textAlign: "center", paddingTop: 10, borderTopWidth: 1, borderTopColor: palette.border, marginTop: 3 } });
