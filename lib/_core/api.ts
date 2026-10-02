@@ -44,13 +44,18 @@ export async function apiCall<T>(endpoint: string, options: RequestInit = {}): P
     console.log("[API] Response received");
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("[API] Error response received");
+      if (response.status !== 401) console.error("[API] Error response received");
       let errorMessage = errorText;
       try {
         const errorJson = JSON.parse(errorText);
         errorMessage = errorJson.error || errorJson.message || errorText;
       } catch {
         // Not JSON, use text as is
+      }
+      if (response.status === 401) {
+        const authError = new Error("UNAUTHENTICATED") as Error & { silent?: boolean };
+        authError.silent = true;
+        throw authError;
       }
       throw new Error(errorMessage || `API call failed: ${response.statusText}`);
     }
@@ -66,7 +71,7 @@ export async function apiCall<T>(endpoint: string, options: RequestInit = {}): P
     console.log("[API] Text response received");
     return (text ? JSON.parse(text) : {}) as T;
   } catch (error) {
-    console.error("[API] Request failed");
+    if (!(error as Error & { silent?: boolean })?.silent) console.warn("[API] Request failed");
     if (error instanceof Error) {
       throw error;
     }
@@ -117,7 +122,7 @@ export async function getMe(): Promise<{
     const result = await apiCall<{ user: any }>("/api/auth/me");
     return result.user || null;
   } catch {
-    console.error("[API] getMe failed");
+    console.warn("[API] No authenticated user");
     return null;
   }
 }

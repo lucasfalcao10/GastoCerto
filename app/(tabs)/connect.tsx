@@ -4,9 +4,10 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-na
 import { ScreenContainer } from "@/components/screen-container";
 import { Icon, Pill, PrimaryButton, SectionTitle, SecondaryButton, Surface, palette } from "@/components/finance-ui";
 import { useFinance } from "@/lib/finance-store";
+import { startOAuthLogin } from "@/constants/oauth";
 
 export default function ConnectScreen() {
-  const { connection, lastSyncAt, newPurchases, syncDemo, importCsv, setConnection } = useFinance();
+  const { connection, lastSyncAt, newPurchases, syncDemo, importCsv, setConnection, user, backendConnected } = useFinance();
   const [status, setStatus] = useState("");
   const connected = connection === "connected";
   const sync = () => {
@@ -33,6 +34,15 @@ export default function ConnectScreen() {
           <Text style={styles.title}>Seu C6, sem digitação.</Text>
           <Text style={styles.subtitle}>Conecte por Open Finance e entenda cada compra no mesmo lugar.</Text>
         </View>
+
+        <Surface style={styles.accountCard}>
+          <Icon name={user ? "cloud-done-outline" : "person-circle-outline"} size={22} color={user ? palette.lime : palette.amber} />
+          <View style={styles.accountCopy}>
+            <Text style={styles.accountTitle}>{user ? `Dados sincronizados${backendConnected ? " na nuvem" : ""}` : "Entre para salvar na nuvem"}</Text>
+            <Text style={styles.accountText}>{user ? (user.email || "Conta autenticada") : "Use sua conta Manus para acessar os mesmos lançamentos no navegador e no celular."}</Text>
+          </View>
+          {!user ? <SecondaryButton label="Entrar" onPress={() => startOAuthLogin().catch(() => setStatus("Não foi possível abrir o login agora."))} /> : <Pill tone={backendConnected ? "lime" : "muted"}>{backendConnected ? "Online" : "Local"}</Pill>}
+        </Surface>
 
         <Surface style={styles.c6Card}>
           <View style={styles.c6Header}>
@@ -90,7 +100,7 @@ function Step({ num, title, text, done }: { num: string; title: string; text: st
 }
 
 const styles = StyleSheet.create({
-  content: { width: "100%", maxWidth: 780, alignSelf: "center", padding: 18, gap: 18 },
+  content: { width: "100%", maxWidth: 780, alignSelf: "center", padding: 18, gap: 18 }, accountCard: { flexDirection: "row", alignItems: "center", gap: 11, backgroundColor: palette.surfaceAlt }, accountCopy: { flex: 1 }, accountTitle: { color: palette.text, fontSize: 13, fontWeight: "800" }, accountText: { color: palette.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
   kicker: { color: palette.muted, fontWeight: "800", fontSize: 11, letterSpacing: 1.2, marginBottom: 7 },
   title: { color: palette.text, fontWeight: "900", fontSize: 28, letterSpacing: -0.8 },
   subtitle: { color: palette.muted, fontSize: 14, lineHeight: 20, marginTop: 8, maxWidth: 520 },
